@@ -26,7 +26,11 @@ local function http_post(url)
   local client = http.new()
   client:set_timeout(1500)
   local res, err = client:request_uri(url, { method = "POST" })
-  if err then return nil, err end
+
+  if err then
+    return nil, err
+  end
+
   if not res or res.status >= 400 then
     return nil, "bad status: " .. (res and res.status or "nil")
   end
@@ -36,9 +40,14 @@ end
 local function with_boot_lock(target, ttl, fn)
   local dict = ngx.shared.sakura_switch
   local key = "bootlock:" .. target
+
   if dict and dict:add(key, true, ttl or 5) then
     local ok, err = pcall(fn)
-    if not ok then ngx.log(ngx.ERR, "boot lock fn error: ", err) end
+
+    if not ok then
+      ngx.log(ngx.ERR, "boot lock fn error: ", err)
+    end
+
     if dict then dict:delete(key) end
   end
 end
@@ -55,9 +64,10 @@ local function wait_upstream_ready(target, total_ms, interval_ms)
   local host = hp.host or hp.name
   local port = tonumber(hp.port)
 
-  total_ms = total_ms or 4000
-  interval_ms = interval_ms or 100
+  total_ms = total_ms or 15000
+  interval_ms = interval_ms or 200
 
+  ngx.log(ngx.INFO, "[wait] target=", target, " host=", host, " port=", port, " total_ms=", total_ms)
   local deadline = ngx.now() + (total_ms / 1000)
   while ngx.now() < deadline do
     local sock = ngx.socket.tcp()
@@ -65,51 +75,60 @@ local function wait_upstream_ready(target, total_ms, interval_ms)
     local ok = sock:connect(host, port)
     if ok then
       sock:close()
+      ngx.log(ngx.INFO, "[wait] target=", target, " is ready")
       return true
     end
     ngx.sleep(interval_ms / 1000)
   end
 
+  ngx.log(ngx.WARN, "[wait] timeout waiting for target=", target)
   return false
 end
 
 local function trigger(target)
   local launcher_port = "5000"
   local launcher_address = "http://launcher:" .. launcher_port .. "/trigger/" .. target
+  ngx.log(ngx.INFO, "[trigger] ", target, " -> ", launcher_address)
 
   local client = http.new()
   client:set_timeout(1000)
-  local _, err = client:request_uri(launcher_address, { method = "POST" })
+  local res, err = client:request_uri(launcher_address, { method = "POST" })
 
   if err then
-    ngx.log(ngx.ERR, "failed to trigger: ", err)
+    ngx.log(ngx.ERR, "[trigger] error: ", err)
+  else
+    ngx.log(ngx.INFO, "[trigger] status=", res and res.status)
   end
 
-  local ready = wait_upstream_ready(target, 4000, 100)
+  local ready = wait_upstream_ready(target, 15000, 200)
   if not ready then
-    ngx.log(ngx.WARN, "upstream not ready for ", target, " -> fallback to heralding")
+    ngx.log(ngx.WARN, "[trigger] upstream not ready for ", target, " -> fallback to heralding")
   end
 end
 
 local function trigger_infty(target)
   local launcher_port = "5000"
   local launcher_address = "http://launcher:" .. launcher_port .. "/trigger-infty/" .. target
+  ngx.log(ngx.INFO, "[trigger-infty] ", target, " -> ", launcher_address)
 
   local client = http.new()
   client:set_timeout(1000)
-  local _, err = client:request_uri(launcher_address, { method = "POST" })
+  local res, err = client:request_uri(launcher_address, { method = "POST" })
 
   if err then
-    ngx.log(ngx.ERR, "failed to trigger: ", err)
+    ngx.log(ngx.ERR, "[trigger-infty] error: ", err)
+  else
+    ngx.log(ngx.INFO, "[trigger-infty] status=", res and res.status)
   end
 
-  local ready = wait_upstream_ready(target, 4000, 100)
+  local ready = wait_upstream_ready(target, 15000, 200)
   if not ready then
-    ngx.log(ngx.WARN, "upstream not ready for ", target, " -> fallback to heralding")
+    ngx.log(ngx.WARN, "[trigger-infty] upstream not ready for ", target, " -> fallback to heralding")
   end
 end
 
 local function schedule_trigger(kind, target)
+  ngx.log(ngx.INFO, "[schedule] kind=", kind, " target=", target)
   local ok, err = ngx.timer.at(0, function(premature, k, t)
     if premature then return end
     if k == "infty" then
@@ -118,26 +137,29 @@ local function schedule_trigger(kind, target)
       trigger(t)
     end
   end, kind, target)
-  if not ok then ngx.log(ngx.ERR, "timer schedule failed: ", err) end
+  if not ok then ngx.log(ngx.ERR, "[schedule] timer failed: ", err) end
 end
 
 local function trigger_and_proxy(target)
   local launcher_port = "5000"
   local launcher_address = "http://launcher:" .. launcher_port .. "/trigger/" .. target
+  ngx.log(ngx.INFO, "[trigger+proxy] ", target)
 
   with_boot_lock("trg:" .. target, 5, function()
     local client = http.new()
     client:set_timeout(1000)
-    local _, err = client:request_uri(launcher_address, { method = "POST" })
+    local res, err = client:request_uri(launcher_address, { method = "POST" })
 
     if err then
-      ngx.log(ngx.ERR, "failed to trigger: ", err)
+      ngx.log(ngx.ERR, "[trigger+proxy] error: ", err)
+    else
+      ngx.log(ngx.INFO, "[trigger+proxy] status=", res and res.status)
     end
   end)
 
-  local ready = wait_upstream_ready(target, 4000, 100)
+  local ready = wait_upstream_ready(target, 15000, 200)
   if not ready then
-    ngx.log(ngx.WARN, "upstream not ready for ", target, " -> fallback to heralding")
+    ngx.log(ngx.WARN, "[trigger+proxy] upstream not ready for ", target, " -> fallback to heralding")
     return ngx.exec("@heralding")
   end
 
@@ -186,6 +208,7 @@ do
   local dict = ngx.shared.sakura_switch
   local prev = dict and dict:get("prev_mode")
   if prev ~= mode then
+    ngx.log(ngx.INFO, "[mode-detect] change prev=", tostring(prev), " -> ", mode)
     if dict then
       dict:set("prev_mode", mode, 3600)
     end
