@@ -24,13 +24,20 @@ local function handle_mode_change(new_mode)
   end
 
   if new_mode == "sakura" then
-    post("stop/wordpot"); post("stop/h0neytr4p")
+    post("trigger-infty/heralding")
+    post("stop/wordpot")
+    post("stop/h0neytr4p")
 
   elseif new_mode == "yozakura" then
-    post("trigger-infty/wordpot"); post("trigger-infty/h0neytr4p")
+    post("trigger-infty/heralding")
+    post("trigger-infty/wordpot")
+    post("trigger-infty/h0neytr4p")
 
   elseif new_mode == "tsubomi" then
-    post("stop/wordpot"); post("stop/h0neytr4p"); post("trigger-infty/h0neytr4p")
+    post("stop/wordpot")
+    post("stop/h0neytr4p")
+    post("trigger-infty/h0neytr4p")
+    post("stop/heralding")
   end
 end
 

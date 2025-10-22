@@ -152,6 +152,17 @@ def get_cowrie_logs():
   except FileNotFoundError:
     return jsonify({'error': 'cowrie.json not found'}), 404
 
+@bp.route('/trigger/heralding', methods=['POST'])
+def trigger_heralding():
+  session_manager.update_session("heralding")
+
+  with session_manager._services["heralding"].stop_lock:
+    if not docker_manager.is_service_running("heralding"):
+      docker_manager.start_services(["heralding"])
+    session_manager.update_session("heralding")
+
+  return "HTTP Honeypot Triggered", 200
+
 @bp.route('/trigger/wordpot', methods=['POST'])
 def trigger_wordpot():
   session_manager.update_session("wordpot")
@@ -205,6 +216,15 @@ def _ensure_session(service_name: str, persist: bool = False):
   session_manager.ensure_session(service_name, persist=persist)
   return session_manager._services[service_name]
 
+@bp.route('/trigger-infty/heralding', methods=['POST'])
+def trigger_infty_heralding():
+  session_manager.update_session("heralding", persist=True)
+
+  with session_manager._services["heralding"].stop_lock:
+    if not docker_manager.is_service_running("heralding"):
+      docker_manager.start_services(["heralding"])
+  return "HTTP Honeypot Triggered", 200
+
 @bp.route('/trigger-infty/wordpot', methods=['POST'])
 def trigger_infty_wordpot():
   session_manager.update_session("wordpot", persist=True)
@@ -240,6 +260,15 @@ def trigger_infty_cowrie():
     if not docker_manager.is_service_running("cowrie"):
       docker_manager.start_services(["cowrie"])
   return "SSH Honeypot Triggered", 200
+
+@bp.route('/stop/heralding', methods=['POST'])
+def stop_heralding():
+  _ensure_session("heralding")
+
+  with session_manager._services["heralding"].stop_lock:
+    if docker_manager.is_service_running("heralding"):
+      docker_manager.stop_services(["heralding"])
+  return "HTTP Honeypot Triggered", 200
 
 @bp.route('/stop/wordpot', methods=['POST'])
 def stop_wordpot():

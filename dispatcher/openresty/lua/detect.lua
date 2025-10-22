@@ -85,61 +85,6 @@ local function wait_upstream_ready(target, total_ms, interval_ms)
   return false
 end
 
-local function trigger(target)
-  local launcher_port = "5000"
-  local launcher_address = "http://launcher:" .. launcher_port .. "/trigger/" .. target
-  ngx.log(ngx.INFO, "[trigger] ", target, " -> ", launcher_address)
-
-  local client = http.new()
-  client:set_timeout(1000)
-  local res, err = client:request_uri(launcher_address, { method = "POST" })
-
-  if err then
-    ngx.log(ngx.ERR, "[trigger] error: ", err)
-  else
-    ngx.log(ngx.INFO, "[trigger] status=", res and res.status)
-  end
-
-  local ready = wait_upstream_ready(target, 15000, 200)
-  if not ready then
-    ngx.log(ngx.WARN, "[trigger] upstream not ready for ", target, " -> fallback to heralding")
-  end
-end
-
-local function trigger_infty(target)
-  local launcher_port = "5000"
-  local launcher_address = "http://launcher:" .. launcher_port .. "/trigger-infty/" .. target
-  ngx.log(ngx.INFO, "[trigger-infty] ", target, " -> ", launcher_address)
-
-  local client = http.new()
-  client:set_timeout(1000)
-  local res, err = client:request_uri(launcher_address, { method = "POST" })
-
-  if err then
-    ngx.log(ngx.ERR, "[trigger-infty] error: ", err)
-  else
-    ngx.log(ngx.INFO, "[trigger-infty] status=", res and res.status)
-  end
-
-  local ready = wait_upstream_ready(target, 15000, 200)
-  if not ready then
-    ngx.log(ngx.WARN, "[trigger-infty] upstream not ready for ", target, " -> fallback to heralding")
-  end
-end
-
-local function schedule_trigger(kind, target)
-  ngx.log(ngx.INFO, "[schedule] kind=", kind, " target=", target)
-  local ok, err = ngx.timer.at(0, function(premature, k, t)
-    if premature then return end
-    if k == "infty" then
-      trigger_infty(t)
-    else
-      trigger(t)
-    end
-  end, kind, target)
-  if not ok then ngx.log(ngx.ERR, "[schedule] timer failed: ", err) end
-end
-
 local function trigger_and_proxy(target)
   local launcher_port = "5000"
   local launcher_address = "http://launcher:" .. launcher_port .. "/trigger/" .. target
@@ -166,19 +111,6 @@ local function trigger_and_proxy(target)
   return ngx.exec("@" .. target)
 end
 
-local function stop(target)
-  local launcher_port = "5000"
-  local launcher_address = "http://launcher:" .. launcher_port .. "/stop/" .. target
-
-  local client = http.new()
-  client:set_timeout(1000)
-  local _, err = client:request_uri(launcher_address, { method = "POST" })
-
-  if err then
-    ngx.log(ngx.ERR, "failed to stop: ", err)
-  end
-end
-
 local lowint_patterns = {
   "sqlmap", "python-requests", "nmap", "masscan", "nikto", "favicon.ico",
   "c:\\windows\\system32", "/proc/self/environ","cmd.exe", "powershell"
@@ -203,33 +135,6 @@ local is_low  = match_any_in({ uri, dec_uri, ua }, lowint_patterns)
 local is_root = (path == "/")
 
 local mode = current_mode()
-
-do
-  local dict = ngx.shared.sakura_switch
-  local prev = dict and dict:get("prev_mode")
-  if prev ~= mode then
-    ngx.log(ngx.INFO, "[mode-detect] change prev=", tostring(prev), " -> ", mode)
-    if dict then
-      dict:set("prev_mode", mode, 3600)
-    end
-
-    with_boot_lock("mode:" .. mode, 10, function()
-      if mode == "sakura" then
-        stop("wordpot")
-        stop("h0neytr4p")
-
-      elseif mode == "yozakura" then
-        schedule_trigger("infty", "wordpot")
-        schedule_trigger("infty", "h0neytr4p")
-
-      elseif mode == "tsubomi" then
-        stop("h0neytr4p")
-        stop("wordpot")
-        schedule_trigger("infty", "h0neytr4p")
-      end
-    end)
-  end
-end
 
 -- Sakura
 if mode == "sakura" then
