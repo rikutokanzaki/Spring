@@ -1,7 +1,7 @@
 local dict = ngx.shared.sakura_switch
 local modes = { "sakura", "yozakura", "tsubomi" }
 local idx = 1
-local rotate_interval = 780
+local rotate_interval = 1020
 
 dict:set("mode", modes[idx])
 ngx.log(ngx.INFO, "[mode-init] mode=", modes[idx])
