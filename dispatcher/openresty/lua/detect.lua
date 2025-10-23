@@ -117,9 +117,72 @@ local function trigger_and_proxy(target)
   return ngx.exec("@" .. target)
 end
 
-local lowint_patterns = {
-  "sqlmap", "python-requests", "nmap", "masscan", "nikto", "favicon.ico",
-  "c:\\windows\\system32", "/proc/self/environ","cmd.exe", "powershell"
+local high_patterns = {
+  -- Scanners / Clients
+  "sqlmap","nikto","nmap","masscan","zgrab","whatweb","acunetix","wpscan",
+  "nessus","ffuf","gobuster","dirbuster","arachni","owasp zap","zaproxy",
+  "python-requests","aiohttp","libwww-perl","curl","wget","go-http-client",
+  "okhttp","java/","httpclient","perl","ruby","python",
+
+  -- Sensitive files / Exposures
+  "/.git/","/.git/config","/.svn/","/.hg/","/.bzr/","/.DS_Store",
+  "/.env","/.htaccess","/.htpasswd","/id_rsa","/id_dsa","/phpinfo.php",
+  "/server-status","/web.config","/config.php","/localsettings.php",
+  "/crossdomain.xml","/backup","/bak","/adminer.php","/phpmyadmin",
+
+  -- Path Traversal (including encoded)
+  "../","..\\","..%2f","%2e%2e%2f","..%5c","%2e%2e%5c","%252e%252e%252f",
+  "%2f..%2f","%5c..%5c",
+
+  -- LFI/RFI wrappers
+  "file://","php://","phar://","zip://","data://","expect://","jar://",
+
+  -- LFI targets
+  "/etc/passwd","/proc/self/environ","/proc/version","/windows/win.ini",
+  "c:\\windows\\win.ini","c:\\windows\\system32","/var/log/","/root/.ssh",
+
+  -- SSRF / Cloud metadata
+  "169.254.169.254","/latest/meta-data/","metadata.google.internal",
+  "localhost","127.0.0.1","0.0.0.0","::1",
+
+  -- SQLi
+  " or 1=1"," and 1=1","' or '1'='1","\" or \"1\"=\"1","') or ('1'='1",
+  " union select "," order by "," information_schema","load_file(",
+  " into outfile","sleep(","benchmark(","xp_cmdshell","@@version",
+  "%27%20or%20%271%27%3D%271","or%201%3D1","union%20select",
+
+  -- NoSQLi
+  "$ne","$gt","$gte","$lt","$lte","$where","ObjectId(","db.",
+
+  -- Command Injection / RCE
+  ";wget",";curl",";id",";uname",";cat",";bash",";sh","&&wget","&&curl",
+  "| id","| uname","| nc","| bash","| sh","||","`id`","$(id)","/bin/sh",
+  "/bin/bash","/dev/tcp/","bash -i","sh -i","powershell","cmd.exe",
+  "certutil -urlcache","bitsadmin","Invoke-WebRequest","Invoke-Expression",
+
+  -- PHP code exec
+  "assert(","eval(","system(","exec(","passthru(","shell_exec(",
+  "popen(","proc_open(","preg_replace/e",
+
+  -- Java/.NET deserialization
+  "rO0AB","java.lang.Runtime","ProcessBuilder","org.apache.commons.collections",
+  "ObjectInputStream","ysoserial","System.Diagnostics.ProcessStartInfo",
+  "ObjectDataProvider",
+
+  -- Template Injection / SSTI
+  "${jndi:","${${","jndi:ldap","jndi:rmi","{{7*7}}","#{7*7}","*{7*7}",
+  "${7*7}","T(java.lang.Runtime)",
+
+  -- Shellshock
+  "() { :;};","() {","/bin/bash -c",
+
+  -- Struts2 / OGNL
+  "method:%23","%23_memberAccess","class.classLoader","redirect:",
+  "action:","${%23context",
+
+  -- IoT / Router common paths
+  "/cgi-bin/","/boaform/","/HNAP1/","/GponForm/","/uddi/","/hudson/",
+  "/manager/html","/luci/","/wlmngr","/tmUnblock.cgi",
 }
 
 local wordpress_patterns = {
@@ -127,6 +190,14 @@ local wordpress_patterns = {
   "wp-content", "wp-includes", "wp-json", "wp-config.php",
   "wp-comments-post.php", "wp-cron.php", "wp-"
 }
+
+for i, v in ipairs(high_patterns) do
+  high_patterns[i] = v:lower()
+end
+
+for i, v in ipairs(wordpress_patterns) do
+  wordpress_patterns[i] = v:lower()
+end
 
 local raw_uri = ngx.var.request_uri or ""
 local uri     = raw_uri:lower()
@@ -137,31 +208,31 @@ local auth    = (ngx.var.http_authorization or ngx.var.http_proxy_authorization 
 local has_auth_header = auth:find("basic ", 1, true) or auth:find("digest ", 1, true)
 
 local is_wp   = match_any_in({ uri, dec_uri }, wordpress_patterns)
-local is_low  = match_any_in({ uri, dec_uri, ua }, lowint_patterns)
-local is_root = (path == "/")
+local is_high = match_any_in({ uri, dec_uri, ua }, high_patterns)
+
+local target
+if is_wp then
+  target = "wordpot"
+elseif (not is_wp) and is_high then
+  target = "h0neytr4p"
+else
+  target = "heralding"
+end
 
 local mode = current_mode()
 
 -- Sakura
 if mode == "sakura" then
-  if is_wp then
-    return trigger_and_proxy("wordpot")
-  elseif has_auth_header or is_root or is_low then
-    return proxy("heralding")
+  if target == "wordpot" or target == "h0neytr4p" then
+    return trigger_and_proxy(target)
   else
-    return trigger_and_proxy("h0neytr4p")
+    return proxy("heralding")
   end
 end
 
 -- Yozakura
 if mode == "yozakura" then
-  if is_wp then
-    return proxy("wordpot")
-  elseif has_auth_header or is_root or is_low then
-    return proxy("heralding")
-  else
-    return proxy("h0neytr4p")
-  end
+  return proxy(target)
 end
 
 -- Tsubomi
