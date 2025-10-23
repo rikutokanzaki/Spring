@@ -255,7 +255,6 @@ services:
     user: root
     volumes:
       - certs:/usr/share/logstash/certs
-      - ../elk/logstash/logstash_ingest_data/:/usr/share/logstash/ingest_data/
       - ../elk/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
       - ${SPRING_DATA_PATH}:/data
     ports:
