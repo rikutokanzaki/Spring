@@ -19,6 +19,9 @@ local function match_any_in(strs, patterns)
 end
 
 local function proxy(target)
+  local mode = current_mode()
+  ngx.var.spring_mode    = mode
+
   return ngx.exec("@" .. target)
 end
 
@@ -89,6 +92,9 @@ local function trigger_and_proxy(target)
   local launcher_port = "5000"
   local launcher_address = "http://launcher:" .. launcher_port .. "/trigger/" .. target
   ngx.log(ngx.INFO, "[trigger+proxy] ", target)
+
+  local mode = current_mode()
+  ngx.var.spring_mode    = mode
 
   with_boot_lock("trg:" .. target, 5, function()
     local client = http.new()
