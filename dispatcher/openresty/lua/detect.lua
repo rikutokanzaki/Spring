@@ -142,9 +142,6 @@ local raw_uri = ngx.var.request_uri or ""
 local uri     = raw_uri:lower()
 local dec_uri = ngx.unescape_uri(uri)
 local ua      = (ngx.var.http_user_agent or ""):lower()
-local path    = ngx.var.uri or "/"
-local auth    = (ngx.var.http_authorization or ngx.var.http_proxy_authorization or ""):lower()
-local has_auth_header = auth:find("basic ", 1, true) or auth:find("digest ", 1, true)
 
 local is_wp   = match_any_in({ uri, dec_uri }, wordpress_patterns)
 local is_high = match_any_in({ uri, dec_uri, ua }, high_patterns)
