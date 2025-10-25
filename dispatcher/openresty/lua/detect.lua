@@ -178,5 +178,3 @@ end
 if mode == "tsubomi" then
   return proxy("h0neytr4p")
 end
-
-return proxy("heralding")
