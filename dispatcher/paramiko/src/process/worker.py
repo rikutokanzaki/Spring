@@ -12,7 +12,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 MODES = ["sakura", "yozakura", "tsubomi"]
-ROTATE_INTERVAL = 60
+ROTATE_INTERVAL = 1020
 LAUNCHER_BASE_URL = "http://launcher:5000"
 
 mode_manager = ModeManager()
