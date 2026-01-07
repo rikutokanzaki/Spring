@@ -50,6 +50,13 @@ for addr in allowed_networks:
 def index():
   return render_template("index.html")
 
+@bp.route('/current-mode', methods=['GET'])
+def current_mode():
+  mode_controller = current_app.config.get('mode_controller')
+  if mode_controller:
+    return mode_controller.get_current_mode(), 200
+  return "sakura", 200
+
 @bp.route('/api/logs/openresty', methods=['GET'])
 def get_openresty_logs():
   file_path = os.path.join(os.path.dirname(__file__), '/data/openresty/access.log')

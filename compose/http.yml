@@ -25,6 +25,10 @@ services:
   launcher:
     container_name: launcher
     build: ../launcher
+    depends_on:
+      - heralding
+      - h0neytr4p
+      - wordpot
     env_file:
       - ../.env
     volumes:
