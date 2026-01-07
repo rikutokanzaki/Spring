@@ -23,6 +23,9 @@ services:
   launcher:
     container_name: launcher
     build: ../launcher
+    depends_on:
+      - heralding
+      - cowrie
     env_file:
       - ../.env
     volumes:

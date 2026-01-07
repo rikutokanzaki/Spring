@@ -1,54 +1,49 @@
+local http = require("resty.http")
 local dict = ngx.shared.sakura_switch
-local modes = { "sakura", "yozakura", "tsubomi" }
-local idx = 1
-local rotate_interval = 1020
 
-dict:set("mode", modes[idx])
-ngx.log(ngx.INFO, "[mode-init] mode=", modes[idx])
+local function fetch_current_mode()
+  local c = http.new()
+  c:set_timeout(2000)
 
-local function handle_mode_change(new_mode)
-  ngx.log(ngx.INFO, "[mode-change] -> ", new_mode)
+  local res, err = c:request_uri("http://launcher:5000/current-mode", {
+    method = "GET"
+  })
 
-  local http = require("resty.http")
-  local function post(path)
-    local c = http.new()
-    c:set_timeout(1000)
-    local res, err = c:request_uri("http://launcher:5000/" .. path, { method = "POST" })
+  if err then
+    ngx.log(ngx.ERR, "[mode-fetch] failed: ", err)
+    return nil
+  end
 
-    if err then
-      ngx.log(ngx.ERR, "[launcher] POST /", path, " failed: ", err)
+  if res.status == 200 then
+    local mode = res.body
+    return mode
+  end
 
-    else
-      ngx.log(ngx.INFO, "[launcher] POST /", path, " status=", res and res.status)
+  return nil
+end
+
+local function sync_mode()
+  local new_mode = fetch_current_mode()
+  if new_mode then
+    local old_mode = dict:get("mode")
+    if old_mode ~= new_mode then
+      dict:set("mode", new_mode)
+      ngx.log(ngx.INFO, "[mode-sync] ", old_mode, " -> ", new_mode)
     end
   end
+end
 
-  if new_mode == "sakura" then
-    post("trigger-infty/heralding")
-    post("stop/wordpot")
-    post("stop/h0neytr4p")
+dict:set("mode", "sakura")
+ngx.log(ngx.INFO, "[mode-init] mode=sakura (default)")
 
-  elseif new_mode == "yozakura" then
-    post("trigger-infty/heralding")
-    post("trigger-infty/wordpot")
-    post("trigger-infty/h0neytr4p")
-
-  elseif new_mode == "tsubomi" then
-    post("stop/wordpot")
-    post("stop/h0neytr4p")
-    post("trigger-infty/h0neytr4p")
-    post("stop/heralding")
+local ok, err = ngx.timer.at(0, function()
+  local initial_mode = fetch_current_mode()
+  if initial_mode then
+    dict:set("mode", initial_mode)
+    ngx.log(ngx.INFO, "[mode-init] mode=", initial_mode)
   end
-end
+end)
+if not ok then ngx.log(ngx.ERR, "init timer error: ", err) end
 
-local function rotate()
-  idx = (idx % #modes) + 1
-  local new_mode = modes[idx]
-  dict:set("mode", new_mode)
-  ngx.log(ngx.INFO, "[mode-rotate] -> ", new_mode)
-
-  handle_mode_change(new_mode)
-end
-
-local ok, err = ngx.timer.every(rotate_interval, rotate)
-if not ok then ngx.log(ngx.ERR, "timer error: ", err) end
+local ok, err = ngx.timer.every(10, sync_mode)
+if not ok then ngx.log(ngx.ERR, "sync timer error: ", err) end

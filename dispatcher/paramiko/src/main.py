@@ -3,7 +3,6 @@ from auth import auth_user
 from connector import connect_server
 from session import handler
 from utils import log_event, resource_manager
-from process import worker
 import logging
 import socket
 import threading
@@ -260,7 +259,5 @@ def start_proxy():
 
 if __name__ == "__main__":
   sys.path.insert(0, '/app')
-
-  worker.start_worker_thread()
 
   start_proxy()
