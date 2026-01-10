@@ -118,8 +118,8 @@ local function trigger_and_proxy(target)
 end
 
 local high_patterns = {
-  "sqlmap", "python-requests", "python", "curl", "wget", "nmap", "masscan", "nikto",
-  "../", "/etc/passwd", "c:\\windows\\system32", "/proc/self/environ",
+  "sqlmap", "python-requests", "python", "curl", "wget", "nmap", "masscan", "nikto", "phpunit",
+  "../", "/etc/passwd", "c:\\windows\\system32", ".env", "/proc/self/environ",
   "or 1=1", "' or '1'='1", "\" or \"1\"=\"1", "union select", "sleep(", "benchmark(",
   "cmd.exe", "powershell"
 }
